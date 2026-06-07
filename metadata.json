@@ -1,0 +1,8 @@
+{
+  "name": "PS4 Nexus AIO Toolkit",
+  "description": "The ultimate All-In-One PlayStation 4 utility for wireless transfer, FTP hosting, payload loaders, game libraries, custom themes, cheat lookups, and link scraping.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
