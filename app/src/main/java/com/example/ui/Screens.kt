@@ -217,6 +217,10 @@ fun DashboardScreen(viewModel: NexusViewModel) {
     val socLoad by viewModel.socLoad.collectAsState()
     val isWirelessRunning by viewModel.isWirelessServerRunning.collectAsState()
     val isFtpRunning by viewModel.isFtpServerRunning.collectAsState()
+    val ftpServerUptime by viewModel.ftpServerUptime.collectAsState()
+    val ftpServerConnections by viewModel.ftpServerConnections.collectAsState()
+    val ftpServerSpeed by viewModel.ftpServerSpeed.collectAsState()
+    val ftpServerLogs by viewModel.ftpServerLogs.collectAsState()
     
     val context = LocalContext.current
     var ipInput by remember { mutableStateOf(ps4Ip) }
@@ -374,6 +378,263 @@ fun DashboardScreen(viewModel: NexusViewModel) {
                     progress = if (pingState == PingStatus.ONLINE) socLoad / 100f else 0f,
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+
+        // FTP Host Server Status Dashboard Component
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = NexusNavy),
+                border = BorderStroke(1.dp, Color(0x15FFFFFF)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Header Row with title and state-toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "INTEGRATED FTP SERVICE",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    color = GoldHenGold,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(
+                                            if (isFtpRunning) SuccessGreen else CyberPink,
+                                            CircleShape
+                                        )
+                                )
+                                Text(
+                                    if (isFtpRunning) "RUNNING ON PORT 2121" else "SERVICE OFFLINE",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = if (isFtpRunning) SuccessGreen else CoolGray,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = { viewModel.toggleFtpHoster() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isFtpRunning) CyberPink.copy(0.15f) else ElectricCyan.copy(0.1f),
+                                contentColor = if (isFtpRunning) CyberPink else ElectricCyan
+                            ),
+                            border = BorderStroke(1.dp, if (isFtpRunning) CyberPink.copy(0.4f) else ElectricCyan.copy(0.4f)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .testTag("ftp_dashboard_toggle_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isFtpRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                contentDescription = if (isFtpRunning) "Stop FTP Host" else "Start FTP Host",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                if (isFtpRunning) "STOP" else "START",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Text(
+                        "Enables instant desktop file injections over LAN. Connect using dynamic telemetry gauges beneath:",
+                        style = MaterialTheme.typography.bodySmall.copy(color = CoolGray)
+                    )
+
+                    // Stats Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 1. Uptime gauge
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CardSlate)
+                                .border(1.dp, Color(0x0AFFFFFF), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = "Uptime Icon",
+                                    tint = ElectricCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "UPTIME",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = CoolGray,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    ftpServerUptime,
+                                    color = OffWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // 2. Active Connections gauge
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CardSlate)
+                                .border(1.dp, Color(0x0AFFFFFF), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.People,
+                                    contentDescription = "Active Connections Icon",
+                                    tint = ElectricCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "CLIENTS",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = CoolGray,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    "$ftpServerConnections ACT",
+                                    color = OffWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // 3. Transfer Speed gauge
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CardSlate)
+                                .border(1.dp, Color(0x0AFFFFFF), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SwapVert,
+                                    contentDescription = "Transfer Speed Icon",
+                                    tint = ElectricCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "SPEED",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = CoolGray,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    ftpServerSpeed,
+                                    color = OffWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    // Micro-console logs telemetry
+                    if (isFtpRunning) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF0C0F17))
+                                .border(1.dp, Color(0x1A00E5FF), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(SuccessGreen, CircleShape)
+                                )
+                                Text(
+                                    "HOST SERVICE LOGS:",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = ElectricCyan,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            if (ftpServerLogs.isEmpty()) {
+                                Text(
+                                    "No client activity detected yet. Host listening...",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = CoolGray,
+                                        fontFamily = FontFamily.Monospace
+                                    ),
+                                    fontSize = 10.sp
+                                )
+                            } else {
+                                ftpServerLogs.take(3).forEach { log ->
+                                    Text(
+                                        log,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = OffWhite.copy(0.85f),
+                                            fontFamily = FontFamily.Monospace
+                                        ),
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

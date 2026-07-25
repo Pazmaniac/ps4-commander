@@ -72,6 +72,9 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
     val ftpClientLogs = ftpManager.clientLogs
     val isFtpServerRunning = ftpManager.isHosterRunning
     val ftpServerLogs = ftpManager.hosterLogs
+    val ftpServerUptime = ftpManager.hosterUptime
+    val ftpServerConnections = ftpManager.hosterActiveConnections
+    val ftpServerSpeed = ftpManager.hosterTransferSpeed
 
     // 5. Theme Section State
     private val _themeSearchQuery = MutableStateFlow("")
