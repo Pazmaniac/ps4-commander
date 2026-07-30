@@ -80,6 +80,9 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
     private val _themeSearchQuery = MutableStateFlow("")
     val themeSearchQuery = _themeSearchQuery.asStateFlow()
 
+    private val _activeThemeId = MutableStateFlow("t1")
+    val activeThemeId = _activeThemeId.asStateFlow()
+
     private val _installedThemes = MutableStateFlow<List<Ps4Theme>>(PreloadedData.themes)
     val installedThemes = _installedThemes.asStateFlow()
 
@@ -92,6 +95,10 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
     // Download/Install simulation state for themes and packages
     private val _activeDownloads = MutableStateFlow<Map<String, Int>>(emptyMap()) // ID to percentage
     val activeDownloads = _activeDownloads.asStateFlow()
+
+    fun updateThemeSearchQuery(query: String) {
+        _themeSearchQuery.value = query
+    }
 
     // 6. Game Section State
     private val _gameSearchQuery = MutableStateFlow("")
@@ -640,6 +647,116 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun batchResignAllSaves() {
+        if (_isResigningWorking.value || _savesList.value.isEmpty()) return
+        _isResigningWorking.value = true
+        _resigningProgress.value = 0f
+        val targetAcc = _targetAccountId.value
+
+        viewModelScope.launch {
+            try {
+                addResignerLog("Starting BATCH RE-SIGN for all ${_savesList.value.size} save files to Target Account: $targetAcc...")
+                val totalSaves = _savesList.value.size
+                _savesList.value.forEachIndexed { index, save ->
+                    _resigningProgress.value = (index.toFloat() / totalSaves.toFloat()) * 0.9f
+                    addResignerLog("[$index/$totalSaves] Re-signing '${save.title}' (${save.cusa}) from ID ${save.originalAccountId} -> $targetAcc...")
+                    delay(500)
+                }
+
+                _savesList.value = _savesList.value.map {
+                    it.copy(
+                        originalAccountId = targetAcc,
+                        status = "Resigned"
+                    )
+                }
+                _resigningProgress.value = 1f
+                addResignerLog("Batch re-sign complete! All ${_savesList.value.size} saves successfully updated to $targetAcc.")
+            } catch (e: Exception) {
+                addResignerLog("Batch re-sign error: ${e.message}")
+            } finally {
+                _isResigningWorking.value = false
+            }
+        }
+    }
+
+    fun autoDetectConsoleAccountId() {
+        viewModelScope.launch {
+            addResignerLog("Querying PS4 console at ${_ps4Ip.value} for active user account profile...")
+            delay(600)
+            val detectedId = "8F3A0219C4D5E01B"
+            _targetAccountId.value = detectedId
+            addResignerLog("Console responded: Detected active profile Account_ID: $detectedId")
+        }
+    }
+
+    fun scanSaveDirectory(path: String) {
+        if (_isResigningWorking.value) return
+        _isResigningWorking.value = true
+        _resigningProgress.value = 0f
+
+        viewModelScope.launch {
+            try {
+                addResignerLog("Scanning directory structure '$path' for PS4 PARAM.SFO save containers...")
+                delay(600)
+                _resigningProgress.value = 0.4f
+                addResignerLog("Found 2 PARAM.SFO headers in '$path/SAVEDATA/'...")
+                delay(600)
+                _resigningProgress.value = 0.8f
+
+                val newScannedSave = Ps4SaveData(
+                    id = "scanned_${System.currentTimeMillis()}",
+                    title = "The Last of Us Part I (Imported)",
+                    cusa = "CUSA-03310",
+                    originalAccountId = "0A1B2C3D4E5F6789",
+                    originalConsoleId = "IDPS_001A8C92DF01",
+                    status = "Encrypted & Signed",
+                    sizeDisplay = "8.4 MB",
+                    availableCheats = listOf("Max Ammo & Supplements", "Infinite Crafting Parts", "God Mode (Infinite Health)"),
+                    savesList = listOf("param.sfo", "savedata.bin", "icon0.png")
+                )
+
+                _savesList.value = (_savesList.value + newScannedSave).distinctBy { it.id }
+                _resigningProgress.value = 1f
+                addResignerLog("Scan complete! Identified and imported 'The Last of Us Part I' (CUSA-03310) save container.")
+            } catch (e: Exception) {
+                addResignerLog("Directory scan error: ${e.message}")
+            } finally {
+                _isResigningWorking.value = false
+            }
+        }
+    }
+
+    fun addCustomSave(title: String, cusa: String, originalAccount: String, sizeDisplay: String) {
+        val newSave = Ps4SaveData(
+            id = "custom_${System.currentTimeMillis()}",
+            title = title.ifBlank { "Custom PS4 Save" },
+            cusa = cusa.ifBlank { "CUSA-99999" },
+            originalAccountId = originalAccount.ifBlank { _targetAccountId.value },
+            originalConsoleId = "IDPS_009988776655",
+            status = "Encrypted & Signed",
+            sizeDisplay = sizeDisplay.ifBlank { "5.0 MB" },
+            availableCheats = listOf("Max Resources", "Unlock All Outfits", "Infinite Health"),
+            savesList = listOf("param.sfo", "save_data.bin", "icon0.png")
+        )
+        _savesList.value = (listOf(newSave) + _savesList.value).distinctBy { it.id }
+        _selectedSaveId.value = newSave.id
+        addResignerLog("Added custom save container entry '${newSave.title}' (${newSave.cusa})")
+    }
+
+    fun verifySaveIntegrity(saveId: String) {
+        viewModelScope.launch {
+            val save = _savesList.value.find { it.id == saveId } ?: return@launch
+            addResignerLog("Verifying HMAC-SHA256 & PFS RSA signature blocks for '${save.title}'...")
+            delay(500)
+            addResignerLog("HEADER: PARAM.SFO Magic [0x00]: \\xFFSFO (Valid System Format Object)")
+            delay(400)
+            addResignerLog("PFS KEY: Group 0x1A (Sony Orbis 9.00/11.00 Keystore) -> Valid Key Match")
+            delay(400)
+            addResignerLog("CHECKSUM: Calculated HMAC 0x4F2A9C... Matches PARAM.PFD Table Index")
+            addResignerLog("Integrity Check Passed! Container for ${save.cusa} is 100% valid.")
+        }
+    }
+
     // ==========================================
     // STORE DOWNLOADS & THEME STUDIO ACTIONS
     // ==========================================
@@ -668,6 +785,26 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _repoDownloads.value = update
             }
+        }
+    }
+
+    fun applyThemeToPs4(theme: Ps4Theme, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            onResult("Connecting to PS4 at ${_ps4Ip.value}:9020 (Theme Injector Port)...")
+            delay(500)
+            onResult("Packaging '${theme.title}' Orbis UI assets and metadata...")
+            delay(600)
+            onResult("Transmitting theme payload binary (${theme.sizeMb} MB) to /user/theme/...")
+            delay(800)
+            _activeThemeId.value = theme.id
+            onResult("Success! Theme '${theme.title}' applied to PS4 system home screen.")
+        }
+    }
+
+    fun deleteInstalledTheme(themeId: String) {
+        _installedThemes.value = _installedThemes.value.filter { it.id != themeId }
+        if (_activeThemeId.value == themeId) {
+            _activeThemeId.value = "t1"
         }
     }
 

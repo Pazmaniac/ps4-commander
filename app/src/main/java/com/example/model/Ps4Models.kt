@@ -23,7 +23,10 @@ data class Ps4Theme(
     val imageUrl: String,
     val rating: Float,
     val version: String = "1.00",
-    val pkgUrl: String = ""
+    val pkgUrl: String = "",
+    val category: String = "General",
+    val downloadsCount: Int = 1200,
+    val dateAddedMs: Long = System.currentTimeMillis()
 ) : Serializable
 
 data class Ps4Game(
@@ -208,7 +211,10 @@ object PreloadedData {
             sizeMb = 48.5,
             imageUrl = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=640",
             rating = 4.9f,
-            pkgUrl = "https://nexus-ps4themes.example/BloodborneClassic.theme.pkg"
+            pkgUrl = "https://nexus-ps4themes.example/BloodborneClassic.theme.pkg",
+            category = "Gothic & Dark",
+            downloadsCount = 14200,
+            dateAddedMs = 1715000000000L
         ),
         Ps4Theme(
             id = "t2",
@@ -218,7 +224,10 @@ object PreloadedData {
             sizeMb = 65.2,
             imageUrl = "https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=640",
             rating = 4.8f,
-            pkgUrl = "https://nexus-ps4themes.example/Persona5Royal.theme.pkg"
+            pkgUrl = "https://nexus-ps4themes.example/Persona5Royal.theme.pkg",
+            category = "Anime & Gaming",
+            downloadsCount = 18900,
+            dateAddedMs = 1718000000000L
         ),
         Ps4Theme(
             id = "t3",
@@ -228,7 +237,10 @@ object PreloadedData {
             sizeMb = 32.1,
             imageUrl = "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=640",
             rating = 4.7f,
-            pkgUrl = "https://nexus-ps4themes.example/TLoUScenic.theme.pkg"
+            pkgUrl = "https://nexus-ps4themes.example/TLoUScenic.theme.pkg",
+            category = "Nature & Scenic",
+            downloadsCount = 9500,
+            dateAddedMs = 1712000000000L
         ),
         Ps4Theme(
             id = "t4",
@@ -238,7 +250,10 @@ object PreloadedData {
             sizeMb = 78.4,
             imageUrl = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=640",
             rating = 4.5f,
-            pkgUrl = "https://nexus-ps4themes.example/CyberpunkNeon.theme.pkg"
+            pkgUrl = "https://nexus-ps4themes.example/CyberpunkNeon.theme.pkg",
+            category = "Cyberpunk & Sci-Fi",
+            downloadsCount = 22100,
+            dateAddedMs = 1720000000000L
         ),
         Ps4Theme(
             id = "t5",
@@ -248,7 +263,10 @@ object PreloadedData {
             sizeMb = 54.0,
             imageUrl = "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?q=80&w=640",
             rating = 4.9f,
-            pkgUrl = "https://nexus-ps4themes.example/NierYorha.theme.pkg"
+            pkgUrl = "https://nexus-ps4themes.example/NierYorha.theme.pkg",
+            category = "Minimal & HUD",
+            downloadsCount = 11300,
+            dateAddedMs = 1716000000000L
         ),
         Ps4Theme(
             id = "t6",
@@ -258,7 +276,10 @@ object PreloadedData {
             sizeMb = 29.8,
             imageUrl = "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?q=80&w=640",
             rating = 4.9f,
-            pkgUrl = "https://nexus-ps4themes.example/GhostTsushima.theme.pkg"
+            pkgUrl = "https://nexus-ps4themes.example/GhostTsushima.theme.pkg",
+            category = "Nature & Scenic",
+            downloadsCount = 16400,
+            dateAddedMs = 1719000000000L
         )
     )
 
@@ -429,7 +450,10 @@ object PreloadedData {
             sizeMb = 112.5,
             imageUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=640",
             rating = 4.93f,
-            pkgUrl = "https://nexus-repo.orbis/Witcher3WildHunt.pkg"
+            pkgUrl = "https://nexus-repo.orbis/Witcher3WildHunt.pkg",
+            category = "Anime & Gaming",
+            downloadsCount = 28400,
+            dateAddedMs = 1721000000000L
         ),
         Ps4Theme(
             id = "ot2",
@@ -439,7 +463,10 @@ object PreloadedData {
             sizeMb = 84.8,
             imageUrl = "https://images.unsplash.com/photo-1608889174637-3c44f6326f2a?q=80&w=640",
             rating = 4.85f,
-            pkgUrl = "https://nexus-repo.orbis/SpiderManMilesMorales.pkg"
+            pkgUrl = "https://nexus-repo.orbis/SpiderManMilesMorales.pkg",
+            category = "Cyberpunk & Sci-Fi",
+            downloadsCount = 31200,
+            dateAddedMs = 1722000000000L
         ),
         Ps4Theme(
             id = "ot3",
@@ -449,7 +476,10 @@ object PreloadedData {
             sizeMb = 44.0,
             imageUrl = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=640",
             rating = 4.76f,
-            pkgUrl = "https://nexus-repo.orbis/YakuzaLikeADragon.pkg"
+            pkgUrl = "https://nexus-repo.orbis/YakuzaLikeADragon.pkg",
+            category = "Anime & Gaming",
+            downloadsCount = 15600,
+            dateAddedMs = 1714000000000L
         ),
         Ps4Theme(
             id = "ot4",
@@ -459,7 +489,10 @@ object PreloadedData {
             sizeMb = 28.5,
             imageUrl = "https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=640",
             rating = 4.91f,
-            pkgUrl = "https://nexus-repo.orbis/HollowKnightDirtmouth.pkg"
+            pkgUrl = "https://nexus-repo.orbis/HollowKnightDirtmouth.pkg",
+            category = "Gothic & Dark",
+            downloadsCount = 24800,
+            dateAddedMs = 1723000000000L
         ),
         Ps4Theme(
             id = "ot5",
@@ -469,7 +502,10 @@ object PreloadedData {
             sizeMb = 94.2,
             imageUrl = "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=640",
             rating = 4.88f,
-            pkgUrl = "https://nexus-repo.orbis/DeathStrandingLowRoar.pkg"
+            pkgUrl = "https://nexus-repo.orbis/DeathStrandingLowRoar.pkg",
+            category = "Nature & Scenic",
+            downloadsCount = 19700,
+            dateAddedMs = 1717000000000L
         )
     )
 
