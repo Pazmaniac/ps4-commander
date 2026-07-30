@@ -4218,6 +4218,686 @@ fun GameHubScreen(viewModel: NexusViewModel) {
 }
 
 @Composable
+fun CheatLookupsComponent(
+    viewModel: NexusViewModel,
+    modifier: Modifier = Modifier
+) {
+    val installedCheats by viewModel.installedCheats.collectAsState()
+    val onlineCheats by viewModel.onlineCheatsList.collectAsState()
+    val ps4Ip by viewModel.ps4Ip.collectAsState()
+
+    // Query state
+    var gameIdInput by remember { mutableStateOf("") }
+    var selectedRegion by remember { mutableStateOf("ALL") } // ALL, US, EU, JP
+    var selectedCategory by remember { mutableStateOf("ALL") } // ALL, HP/FP, Combat, Finance, Item Supply, Stats
+    var expandedCheatId by remember { mutableStateOf<String?>(null) }
+    var injectionStatusId by remember { mutableStateOf<String?>(null) }
+
+    // Custom offset generator state
+    var showCustomInspector by remember { mutableStateOf(false) }
+    var customCusaCode by remember { mutableStateOf("CUSA-00000") }
+    var customGameTitle by remember { mutableStateOf("Custom PS4 Title") }
+    var customCheatTitle by remember { mutableStateOf("Infinite Health Patch") }
+    var customHexOffset by remember { mutableStateOf("0x01A84020") }
+    var customOriginalHex by remember { mutableStateOf("41 8B 87 28 02") }
+    var customPatchHex by remember { mutableStateOf("90 90 90 90 90") }
+
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    // Combined all cheats for offline database lookup
+    val allDbCheats = remember(installedCheats, onlineCheats) {
+        (installedCheats + onlineCheats).distinctBy { it.id }
+    }
+
+    // Filter results based on CUSA Game ID, Title, Region, & Category
+    val filteredResults = remember(allDbCheats, gameIdInput, selectedRegion, selectedCategory) {
+        allDbCheats.filter { cheat ->
+            val matchesQuery = if (gameIdInput.isBlank()) true else {
+                cheat.gameCode.contains(gameIdInput, ignoreCase = true) ||
+                        cheat.gameTitle.contains(gameIdInput, ignoreCase = true) ||
+                        cheat.cheatName.contains(gameIdInput, ignoreCase = true)
+            }
+
+            val matchesRegion = if (selectedRegion == "ALL") true else {
+                cheat.region.contains(selectedRegion, ignoreCase = true) || cheat.region.contains("GLOBAL", ignoreCase = true)
+            }
+
+            val matchesCategory = if (selectedCategory == "ALL") true else {
+                cheat.category.contains(selectedCategory, ignoreCase = true)
+            }
+
+            matchesQuery && matchesRegion && matchesCategory
+        }
+    }
+
+    // Quick CUSA Game ID chips
+    val popularGameIdChips = listOf(
+        "CUSA-28863" to "Elden Ring",
+        "CUSA-34384" to "GoW Ragnarök",
+        "CUSA-00299" to "Bloodborne",
+        "CUSA-03041" to "RDR2",
+        "CUSA-00419" to "GTA V",
+        "CUSA-32431" to "RE4 Remake",
+        "CUSA-11995" to "Spider-Man",
+        "CUSA-10249" to "TLOU Part II"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Feature Header Banner
+        Card(
+            colors = CardDefaults.cardColors(containerColor = NexusNavy),
+            border = BorderStroke(1.dp, GoldHenGold.copy(0.4f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().testTag("cheat_lookup_header_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = GoldHenGold, modifier = Modifier.size(20.dp))
+                        Text(
+                            "OFFLINE GAME ID CHEAT LOOKUP ENGINE",
+                            color = GoldHenGold,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(GoldHenGold.copy(0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("${allDbCheats.size} ENTRIES OFFLINE", color = GoldHenGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Text(
+                    "Search by CUSA Title ID, Game Name, or Memory Offset address to retrieve GoldHEN trainer hex codes, patches, and activation instructions.",
+                    color = CoolGray,
+                    fontSize = 10.sp
+                )
+            }
+        }
+
+        // Search Bar for Game ID / Title ID
+        OutlinedTextField(
+            value = gameIdInput,
+            onValueChange = { gameIdInput = it.uppercase() },
+            placeholder = { Text("Enter Game ID (e.g. CUSA-28863) or Title...", color = CoolGray, fontSize = 11.sp) },
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = GoldHenGold) },
+            trailingIcon = {
+                if (gameIdInput.isNotEmpty()) {
+                    IconButton(onClick = { gameIdInput = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = CoolGray)
+                    }
+                }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = GoldHenGold,
+                focusedTextColor = OffWhite,
+                unfocusedTextColor = CoolGray,
+                focusedContainerColor = CardSlate.copy(0.3f),
+                unfocusedContainerColor = CardSlate.copy(0.2f)
+            ),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth().testTag("cheat_lookup_gameid_input")
+        )
+
+        // Quick Preset CUSA Code Chips
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("POPULAR CUSA GAME CODES:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = GoldHenGold)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(popularGameIdChips) { (cusaCode, gameName) ->
+                    val isSelected = gameIdInput == cusaCode
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSelected) GoldHenGold else CardSlate)
+                            .clickable { gameIdInput = cusaCode }
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .testTag("cheat_lookup_chip_$cusaCode"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                cusaCode,
+                                color = if (isSelected) AbyssBlue else GoldHenGold,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "($gameName)",
+                                color = if (isSelected) AbyssBlue.copy(0.8f) else CoolGray,
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Region & Category Filter Controls Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Region Selector
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("REGION:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = CoolGray)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val regions = listOf("ALL", "US", "EU", "JP")
+                    regions.forEach { reg ->
+                        val isSelected = selectedRegion == reg
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isSelected) ElectricCyan else CardSlate)
+                                .clickable { selectedRegion = reg }
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                reg,
+                                color = if (isSelected) AbyssBlue else OffWhite,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Category Selector
+            Column(modifier = Modifier.weight(1.2f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("CATEGORY:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = CoolGray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val cats = listOf("ALL", "HP/FP", "Combat", "Finance", "Item Supply", "Stats")
+                    items(cats) { cat ->
+                        val isSelected = selectedCategory == cat
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isSelected) CyberPink else CardSlate)
+                                .clickable { selectedCategory = cat }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                cat,
+                                color = if (isSelected) AbyssBlue else OffWhite,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Results Status Bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "MATCHING CHEAT ENTRIES (${filteredResults.size})",
+                color = ElectricCyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+
+            if (gameIdInput.isNotEmpty() || selectedRegion != "ALL" || selectedCategory != "ALL") {
+                TextButton(
+                    onClick = {
+                        gameIdInput = ""
+                        selectedRegion = "ALL"
+                        selectedCategory = "ALL"
+                    },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("RESET FILTERS", color = CyberPink, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Empty Search Results State
+        if (filteredResults.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = NexusNavy.copy(0.6f)),
+                border = BorderStroke(1.dp, CardSlate),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = CoolGray, modifier = Modifier.size(32.dp))
+                    Text(
+                        "No cheat codes found for '$gameIdInput'",
+                        color = OffWhite,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Try entering a different CUSA code (e.g. CUSA-28863), clearing region filters, or adding a custom offset using the inspector below.",
+                        color = CoolGray,
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // List of Cheat Results
+        filteredResults.forEach { cheat ->
+            val isExpanded = expandedCheatId == cheat.id
+            val isInjected = injectionStatusId == cheat.id
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = NexusNavy),
+                border = BorderStroke(1.dp, if (isInjected) SuccessGreen else Color(0x20FFFFFF)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().testTag("cheat_lookup_card_${cheat.id}")
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Top Bar: Game Title, CUSA Code & Verification Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    cheat.gameTitle,
+                                    color = OffWhite,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(GoldHenGold.copy(0.2f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        cheat.gameCode,
+                                        color = GoldHenGold,
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Text("Region: ${cheat.region}", color = CoolGray, fontSize = 9.sp)
+                                Text("•", color = CoolGray, fontSize = 9.sp)
+                                Text("Ver: ${cheat.gameVersion}", color = CoolGray, fontSize = 9.sp)
+                            }
+                        }
+
+                        // GoldHEN Verification Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (cheat.isVerified) SuccessGreen.copy(0.15f) else CardSlate)
+                                .border(1.dp, if (cheat.isVerified) SuccessGreen else CoolGray, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = if (cheat.isVerified) SuccessGreen else CoolGray,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text(
+                                    if (cheat.isVerified) "GoldHEN Verified" else "Community",
+                                    color = if (cheat.isVerified) SuccessGreen else CoolGray,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0x10FFFFFF), thickness = 1.dp)
+
+                    // Cheat Name & Category Tag
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(cheat.cheatName, color = OffWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(ElectricCyan.copy(0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(cheat.category.uppercase(), color = ElectricCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Monospace Memory Offset Box
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AbyssBlue)
+                            .border(1.dp, CardSlate)
+                            .padding(8.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                cheat.cheatCodes,
+                                color = OffWhite,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+
+                    // Activation Instructions Accordion Toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(CardSlate.copy(0.5f))
+                            .clickable { expandedCheatId = if (isExpanded) null else cheat.id }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = GoldHenGold, modifier = Modifier.size(14.dp))
+                            Text("Activation Steps & Shortcut", color = GoldHenGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(NexusNavy)
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text(cheat.activationShortcut, color = OffWhite, fontSize = 8.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            }
+
+                            Icon(
+                                if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = CoolGray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Expanded Instructions Panel
+                    if (isExpanded) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CardSlate)
+                                .padding(10.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("IN-GAME INSTRUCTIONS:", color = GoldHenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    cheat.instructions,
+                                    color = OffWhite,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Source DB: ${cheat.author}", color = CoolGray, fontSize = 8.sp)
+                                    Text("Injection Port: WebRTE / 2801", color = CoolGray, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+                        }
+                    }
+
+                    // Action Buttons Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Copy Hex Codes Button
+                        Button(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString("${cheat.gameCode} - ${cheat.cheatName}\n${cheat.cheatCodes}"))
+                                Toast.makeText(context, "Copied Hex Codes for ${cheat.gameCode} to Clipboard", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CardSlate),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.weight(1f).height(32.dp).testTag("copy_hex_btn_${cheat.id}")
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = OffWhite, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("COPY HEX", color = OffWhite, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Send / Inject to PS4 Memory Button
+                        Button(
+                            onClick = {
+                                injectionStatusId = cheat.id
+                                Toast.makeText(context, "Injected ${cheat.cheatName} payload into PS4 ($ps4Ip:2801)", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isInjected) SuccessGreen else GoldHenGold),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.weight(1.3f).height(32.dp).testTag("inject_ps4_cheat_btn_${cheat.id}")
+                        ) {
+                            Icon(
+                                if (isInjected) Icons.Default.CheckCircle else Icons.Default.Send,
+                                contentDescription = null,
+                                tint = AbyssBlue,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                if (isInjected) "INJECTED TO PS4" else "SEND TO PS4",
+                                color = AbyssBlue,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Custom CUSA Offset Inspector & Creator Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = NexusNavy),
+            border = BorderStroke(1.dp, CardSlate),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showCustomInspector = !showCustomInspector },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.Code, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                        Text(
+                            "CUSTOM CUSA OFFSET INSPECTOR & ENTRY CREATOR",
+                            color = ElectricCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Icon(
+                        if (showCustomInspector) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = CoolGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                if (showCustomInspector) {
+                    Text(
+                        "Manually craft and add custom CUSA memory patch entries directly into your offline GoldHEN cheat database.",
+                        color = CoolGray,
+                        fontSize = 10.sp
+                    )
+
+                    OutlinedTextField(
+                        value = customCusaCode,
+                        onValueChange = { customCusaCode = it.uppercase() },
+                        label = { Text("Game CUSA Code (e.g. CUSA-12345)") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricCyan, focusedTextColor = OffWhite, unfocusedTextColor = CoolGray),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = customGameTitle,
+                        onValueChange = { customGameTitle = it },
+                        label = { Text("Game Title") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricCyan, focusedTextColor = OffWhite, unfocusedTextColor = CoolGray),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = customCheatTitle,
+                        onValueChange = { customCheatTitle = it },
+                        label = { Text("Cheat Name") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricCyan, focusedTextColor = OffWhite, unfocusedTextColor = CoolGray),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(
+                            value = customHexOffset,
+                            onValueChange = { customHexOffset = it },
+                            label = { Text("Offset (e.g. 0x2A10)") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricCyan, focusedTextColor = OffWhite, unfocusedTextColor = CoolGray),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = customPatchHex,
+                            onValueChange = { customPatchHex = it },
+                            label = { Text("Patch Hex Bytes") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricCyan, focusedTextColor = OffWhite, unfocusedTextColor = CoolGray),
+                            modifier = Modifier.weight(1.2f),
+                            singleLine = true
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            val newCheat = CheatItem(
+                                id = "custom_" + System.currentTimeMillis(),
+                                gameTitle = customGameTitle,
+                                gameCode = customCusaCode,
+                                category = "Custom Patch",
+                                cheatName = customCheatTitle,
+                                cheatCodes = "Offset: $customHexOffset\nValue: $customOriginalHex -> $customPatchHex\nDescription: Custom memory offset generated via lookup inspector.",
+                                author = "User Inspector",
+                                instructions = "1. Launch $customGameTitle ($customCusaCode).\n2. Press L3 + R3 to open GoldHEN overlay menu.\n3. Enable $customCheatTitle.",
+                                region = "GLOBAL",
+                                gameVersion = "v1.00+",
+                                activationShortcut = "L3 + R3",
+                                isVerified = true
+                            )
+                            viewModel.downloadRepoCheat(newCheat)
+                            gameIdInput = customCusaCode
+                            Toast.makeText(context, "Added $customCusaCode cheat to offline database!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(38.dp).testTag("add_custom_cusa_cheat_btn")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = AbyssBlue, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("SAVE ENTRY TO OFFLINE CHEAT DB", color = AbyssBlue, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun CheatsDbScreen(viewModel: NexusViewModel) {
     val cheats by viewModel.filteredCheats.collectAsState()
     val onlineCheats by viewModel.onlineCheatsList.collectAsState()
@@ -4225,7 +4905,7 @@ fun CheatsDbScreen(viewModel: NexusViewModel) {
     val search by viewModel.cheatSearchQuery.collectAsState()
 
     var searchInput by remember { mutableStateOf(search) }
-    var activeSubTab by remember { mutableStateOf("INSTALLED") } // INSTALLED, ONLINE
+    var activeSubTab by remember { mutableStateOf("INSTALLED") } // INSTALLED, LOOKUP, ONLINE
 
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -4246,10 +4926,11 @@ fun CheatsDbScreen(viewModel: NexusViewModel) {
         // Tab Selector Box
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val tabs = listOf(
                 Pair("INSTALLED", "My Database (${cheats.size})"),
+                Pair("LOOKUP", "Cheat Lookups (Game ID)"),
                 Pair("ONLINE", "Download Trainers DB")
             )
             tabs.forEach { (mode, label) ->
@@ -4260,20 +4941,26 @@ fun CheatsDbScreen(viewModel: NexusViewModel) {
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (isSelected) GoldHenGold else CardSlate)
                         .clickable { activeSubTab = mode }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label,
                         color = if (isSelected) AbyssBlue else OffWhite,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
                     )
                 }
             }
         }
 
         when (activeSubTab) {
+            "LOOKUP" -> {
+                CheatLookupsComponent(viewModel = viewModel, modifier = Modifier.weight(1f))
+            }
+
             "INSTALLED" -> {
                 OutlinedTextField(
                     value = searchInput,
@@ -4510,160 +5197,616 @@ fun LinkScraperScreen(viewModel: NexusViewModel) {
     val url by viewModel.scrapingUrl.collectAsState()
     val isScraping by viewModel.isScraping.collectAsState()
     val results by viewModel.scrapedLinks.collectAsState()
+    val savedLinks by viewModel.savedScrapedLinks.collectAsState()
     val error by viewModel.scraperError.collectAsState()
 
     var urlInput by remember { mutableStateOf(url) }
+    var rawHtmlInput by remember { mutableStateOf("") }
+    var activeSubTab by remember { mutableStateOf("CRAWLER") } // CRAWLER, SAVED, PASTE
+    var selectedCategoryFilter by remember { mutableStateOf("ALL") }
+    var searchQuery by remember { mutableStateOf("") }
+
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+
+    val categories = listOf("ALL", "PKG", "Payload", "Firmware", "Theme", "Cheats", "Exploit")
+
+    // Filter results for live crawler
+    val filteredScrapedResults = remember(results, selectedCategoryFilter, searchQuery) {
+        results.filter { item ->
+            val matchesCategory = if (selectedCategoryFilter == "ALL") true else item.type.equals(selectedCategoryFilter, ignoreCase = true)
+            val matchesSearch = if (searchQuery.isBlank()) true else {
+                item.title.contains(searchQuery, ignoreCase = true) ||
+                        item.url.contains(searchQuery, ignoreCase = true) ||
+                        item.type.contains(searchQuery, ignoreCase = true)
+            }
+            matchesCategory && matchesSearch
+        }
+    }
+
+    // Filter results for saved library
+    val filteredSavedLinks = remember(savedLinks, selectedCategoryFilter, searchQuery) {
+        savedLinks.filter { item ->
+            val matchesCategory = if (selectedCategoryFilter == "ALL") true else item.type.equals(selectedCategoryFilter, ignoreCase = true)
+            val matchesSearch = if (searchQuery.isBlank()) true else {
+                item.title.contains(searchQuery, ignoreCase = true) ||
+                        item.url.contains(searchQuery, ignoreCase = true) ||
+                        item.type.contains(searchQuery, ignoreCase = true)
+            }
+            matchesCategory && matchesSearch
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         SearchBarHeader(
-            title = "DYNAMIC WEB LINK CRAWLER",
-            subtitle = "Harvest active PKGs and exploit payloads from external URLs",
+            title = "PS4 LINK SCRAPER & QUICK ACCESS LIBRARY",
+            subtitle = "Parse web pages for .PKG, payload binaries & themes, then save to local quick access",
             icon = Icons.Default.Language,
             accentColor = ElectricCyan
         )
 
+        // Navigation Sub-Tabs Row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            OutlinedTextField(
-                value = urlInput,
-                onValueChange = { urlInput = it },
-                label = { Text("Crawl URL target") },
-                modifier = Modifier.weight(1f),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ElectricCyan,
-                    focusedTextColor = OffWhite
-                ),
-                singleLine = true
+            val tabs = listOf(
+                Triple("CRAWLER", "URL Crawler", Icons.Default.Language),
+                Triple("SAVED", "Saved Links (${savedLinks.size})", Icons.Default.Bookmark),
+                Triple("PASTE", "Batch HTML Parser", Icons.Default.Code)
             )
 
-            Button(
-                onClick = {
-                    viewModel.setScrapingUrl(urlInput)
-                    viewModel.startScraping()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
-                modifier = Modifier.align(Alignment.CenterVertically),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                if (isScraping) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AbyssBlue, strokeWidth = 2.dp)
-                } else {
-                    Text("Crawl", color = AbyssBlue, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // Quick template suggestions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Presets:", fontSize = 11.sp, color = CoolGray)
-            val templates = listOf(
-                "Karo Exploit" to "https://karo218.ir/",
-                "OrbisPatches" to "https://orbispatches.com/CUSA28863",
-                "DarkSoftware" to "https://darksoftware.xyz/"
-            )
-            templates.forEach { (name, link) ->
+            tabs.forEach { (tabKey, tabLabel, tabIcon) ->
+                val isSelected = activeSubTab == tabKey
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(CardSlate)
-                        .clickable {
-                            urlInput = link
-                            viewModel.selectScraperTemplate(link)
-                        }
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) ElectricCyan else CardSlate)
+                        .clickable { activeSubTab = tabKey }
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                        .testTag("scraper_tab_$tabKey"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(name, color = ElectricCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            tabIcon,
+                            contentDescription = null,
+                            tint = if (isSelected) AbyssBlue else OffWhite,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            tabLabel,
+                            color = if (isSelected) AbyssBlue else OffWhite,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
 
-        error?.let {
-            Text(
-                "Crawler network failed, loading offline local backups. Info: $it",
-                color = GoldHenGold,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(results) { item ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = NexusNavy),
-                    border = BorderStroke(1.dp, Color(0x15FFFFFF)),
-                    shape = RoundedCornerShape(10.dp)
+        when (activeSubTab) {
+            "CRAWLER" -> {
+                // Target URL Input Controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
+                    OutlinedTextField(
+                        value = urlInput,
+                        onValueChange = { urlInput = it },
+                        label = { Text("Target Web URL to Scrape") },
+                        modifier = Modifier.weight(1f).testTag("scraper_url_input"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricCyan,
+                            focusedTextColor = OffWhite,
+                            unfocusedTextColor = CoolGray,
+                            focusedContainerColor = CardSlate.copy(0.3f)
+                        ),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, tint = ElectricCyan) },
+                        trailingIcon = {
+                            if (urlInput.isNotEmpty()) {
+                                IconButton(onClick = { urlInput = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", tint = CoolGray)
+                                }
+                            }
+                        }
+                    )
+
+                    Button(
+                        onClick = {
+                            viewModel.setScrapingUrl(urlInput)
+                            viewModel.startScraping()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .height(52.dp)
+                            .testTag("scraper_crawl_btn"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        if (isScraping) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = AbyssBlue, strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = AbyssBlue, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("PARSE", color = AbyssBlue, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                // Quick Preset Host Chips
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("POPULAR PS4 HOST PRESETS:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = GoldHenGold)
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val templates = listOf(
+                            "Karo Exploit" to "https://karo218.ir/",
+                            "OrbisPatches" to "https://orbispatches.com/CUSA28863",
+                            "DarkSoftware" to "https://darksoftware.xyz/",
+                            "Kameleon Host" to "https://kameleonreboot.github.io/"
+                        )
+                        items(templates) { (name, link) ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(CardSlate)
+                                    .clickable {
+                                        urlInput = link
+                                        viewModel.selectScraperTemplate(link)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                                    .testTag("preset_$name")
+                            ) {
+                                Text(name, color = ElectricCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                error?.let {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(GoldHenGold.copy(0.15f))
+                            .padding(8.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            "Crawler note: $it (Loaded fallback PS4 links)",
+                            color = GoldHenGold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Category Filter & Search Bar Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(categories) { cat ->
+                            val isSelected = selectedCategoryFilter == cat
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isSelected) GoldHenGold else CardSlate)
+                                    .clickable { selectedCategoryFilter = cat }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(CardSlate)
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        item.type.uppercase(),
-                                        fontSize = 8.sp,
-                                        color = GoldHenGold,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
                                 Text(
-                                    item.title,
-                                    color = OffWhite,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    cat,
+                                    color = if (isSelected) AbyssBlue else OffWhite,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
+                        }
+                    }
+
+                    // Save All Parsed Links Button
+                    Button(
+                        onClick = {
+                            viewModel.saveAllScrapedLinks(filteredScrapedResults)
+                            Toast.makeText(context, "Saved ${filteredScrapedResults.size} links to local list!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldHenGold),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp).testTag("save_all_scraped_links_btn")
+                    ) {
+                        Icon(Icons.Default.Bookmark, contentDescription = null, tint = AbyssBlue, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("SAVE ALL (${filteredScrapedResults.size})", color = AbyssBlue, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+
+                // Parsed Scraped Links Results List
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredScrapedResults) { item ->
+                        ScrapedLinkCard(
+                            item = item,
+                            onToggleSave = { viewModel.toggleSaveScrapedLink(item) },
+                            onCopyUrl = {
+                                clipboardManager.setText(AnnotatedString(item.url))
+                                Toast.makeText(context, "Copied URL to Clipboard!", Toast.LENGTH_SHORT).show()
+                            },
+                            onQueueDownload = {
+                                Toast.makeText(context, "Queued ${item.title} to PS4 Transfer Server", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
+
+            "SAVED" -> {
+                // Saved Quick Access Local List View
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "QUICK ACCESS SAVED LINKS (${savedLinks.size})",
+                            color = GoldHenGold,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            "Local list of stored PS4 download links for instant retrieval & injection",
+                            color = CoolGray,
+                            fontSize = 10.sp
+                        )
+                    }
+
+                    if (savedLinks.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                viewModel.clearAllSavedScrapedLinks()
+                                Toast.makeText(context, "Cleared all saved links", Toast.LENGTH_SHORT).show()
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("CLEAR ALL", color = CyberPink, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Category Filter Bar for Saved
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(categories) { cat ->
+                        val isSelected = selectedCategoryFilter == cat
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isSelected) ElectricCyan else CardSlate)
+                                .clickable { selectedCategoryFilter = cat }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                "Source Link: ${item.url}",
-                                fontSize = 10.sp,
-                                color = CoolGray,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                cat,
+                                color = if (isSelected) AbyssBlue else OffWhite,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                }
 
-                        Button(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(item.url))
-                                Toast.makeText(context, "Link Copied!", Toast.LENGTH_SHORT).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
-                            modifier = Modifier.height(28.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(4.dp)
+                if (filteredSavedLinks.isEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = NexusNavy.copy(0.6f)),
+                        border = BorderStroke(1.dp, CardSlate),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Grab Link", color = AbyssBlue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.BookmarkBorder, contentDescription = null, tint = CoolGray, modifier = Modifier.size(36.dp))
+                            Text("No saved links found", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Scrape download links from any PS4 website URL or raw HTML source, then tap the Bookmark icon to save them to your local list.",
+                                color = CoolGray,
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Button(
+                                onClick = { activeSubTab = "CRAWLER" },
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("CRAWL NEW LINKS", color = AbyssBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredSavedLinks) { item ->
+                            ScrapedLinkCard(
+                                item = item,
+                                isSavedTab = true,
+                                onToggleSave = { viewModel.removeSavedScrapedLink(item.url) },
+                                onCopyUrl = {
+                                    clipboardManager.setText(AnnotatedString(item.url))
+                                    Toast.makeText(context, "Copied URL to Clipboard!", Toast.LENGTH_SHORT).show()
+                                },
+                                onQueueDownload = {
+                                    Toast.makeText(context, "Queued ${item.title} to PS4 Transfer Server", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            "PASTE" -> {
+                // Batch HTML Parser Tab
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = NexusNavy),
+                        border = BorderStroke(1.dp, CardSlate),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.Code, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                                Text("PASTE RAW HTML OR TEXT SOURCE", color = ElectricCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Text(
+                                "Paste web page HTML source code, href tags, or text snippets to instantly extract .pkg, .bin, .json, and exploit download links.",
+                                color = CoolGray,
+                                fontSize = 10.sp
+                            )
+
+                            OutlinedTextField(
+                                value = rawHtmlInput,
+                                onValueChange = { rawHtmlInput = it },
+                                placeholder = { Text("Paste HTML snippet with href=\"https://...pkg\" here...", color = CoolGray, fontSize = 10.sp) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(140.dp)
+                                    .testTag("raw_html_input"),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = ElectricCyan,
+                                    focusedTextColor = OffWhite,
+                                    unfocusedTextColor = CoolGray,
+                                    focusedContainerColor = CardSlate.copy(0.3f)
+                                )
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        viewModel.parseRawHtmlAndScrape(rawHtmlInput, "Pasted Source Code")
+                                        activeSubTab = "CRAWLER"
+                                        Toast.makeText(context, "Parsed HTML and extracted PS4 links!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f).height(38.dp).testTag("parse_raw_html_btn")
+                                ) {
+                                    Icon(Icons.Default.Search, contentDescription = null, tint = AbyssBlue, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("EXTRACT PS4 LINKS", color = AbyssBlue, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        rawHtmlInput = """
+                                            <a href="http://host.example/payloads/GoldHEN_v2.4.bin">GoldHEN Payload</a>
+                                            <a href="http://host.example/pkgs/CUSA00299_Bloodborne.pkg">Bloodborne Game PKG</a>
+                                            <a href="http://host.example/cheats/cheats_db.json">GoldHEN Cheats</a>
+                                        """.trimIndent()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CardSlate),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.height(38.dp)
+                                ) {
+                                    Text("PASTE SAMPLE", color = OffWhite, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ScrapedLinkCard(
+    item: ScrapedLink,
+    isSavedTab: Boolean = false,
+    onToggleSave: () -> Unit,
+    onCopyUrl: () -> Unit,
+    onQueueDownload: () -> Unit
+) {
+    val context = LocalContext.current
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = NexusNavy),
+        border = BorderStroke(1.dp, if (item.isSaved) GoldHenGold.copy(0.4f) else Color(0x15FFFFFF)),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth().testTag("scraped_link_card_${item.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                when (item.type) {
+                                    "PKG" -> CyberPink.copy(0.2f)
+                                    "Payload" -> GoldHenGold.copy(0.2f)
+                                    "Cheats" -> ElectricCyan.copy(0.2f)
+                                    "Firmware" -> SuccessGreen.copy(0.2f)
+                                    else -> CardSlate
+                                }
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            item.type.uppercase(),
+                            fontSize = 8.sp,
+                            color = when (item.type) {
+                                "PKG" -> CyberPink
+                                "Payload" -> GoldHenGold
+                                "Cheats" -> ElectricCyan
+                                "Firmware" -> SuccessGreen
+                                else -> OffWhite
+                            },
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+
+                    Text(
+                        item.title,
+                        color = OffWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Bookmark / Save Action Button
+                IconButton(
+                    onClick = {
+                        onToggleSave()
+                        if (!item.isSaved) {
+                            Toast.makeText(context, "Saved to local list!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Removed from saved list", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.size(28.dp).testTag("save_link_btn_${item.id}")
+                ) {
+                    Icon(
+                        if (item.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "Save link",
+                        tint = if (item.isSaved) GoldHenGold else CoolGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // URL Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(AbyssBlue)
+                    .padding(6.dp)
+            ) {
+                Text(
+                    item.url,
+                    fontSize = 9.sp,
+                    color = CoolGray,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Bottom Action Bar Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Est Size: ${item.sizeString} • Host: ${item.sourceUrl.substringAfter("://").substringBefore("/")}",
+                    fontSize = 8.sp,
+                    color = CoolGray
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Copy URL Button
+                    Button(
+                        onClick = onCopyUrl,
+                        colors = ButtonDefaults.buttonColors(containerColor = CardSlate),
+                        modifier = Modifier.height(26.dp).testTag("copy_link_btn_${item.id}"),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = OffWhite, modifier = Modifier.size(10.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Copy", color = OffWhite, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Send to PS4 Transfer Server / Queue Download Button
+                    Button(
+                        onClick = onQueueDownload,
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan),
+                        modifier = Modifier.height(26.dp).testTag("queue_download_btn_${item.id}"),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, tint = AbyssBlue, modifier = Modifier.size(10.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Send to PS4", color = AbyssBlue, fontSize = 8.sp, fontWeight = FontWeight.Black)
                     }
                 }
             }

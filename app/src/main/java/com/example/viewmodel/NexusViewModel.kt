@@ -130,6 +130,39 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
     private val _scrapedLinks = MutableStateFlow<List<ScrapedLink>>(emptyList())
     val scrapedLinks = _scrapedLinks.asStateFlow()
 
+    private val _savedScrapedLinks = MutableStateFlow<List<ScrapedLink>>(
+        listOf(
+            ScrapedLink(
+                id = "saved_1",
+                title = "GoldHEN_900_v2.4b17.bin",
+                url = "http://exploit.local/payloads/GoldHEN_v2.4b17.bin",
+                sizeString = "284 KB",
+                type = "Payload",
+                sourceUrl = "https://karo218.ir/",
+                isSaved = true
+            ),
+            ScrapedLink(
+                id = "saved_2",
+                title = "CUSA28863_EldenRing_v1.10_Update.pkg",
+                url = "http://host-assets.example/CUSA28863_01.10.pkg",
+                sizeString = "14.5 GB",
+                type = "PKG",
+                sourceUrl = "https://orbispatches.com/CUSA28863",
+                isSaved = true
+            ),
+            ScrapedLink(
+                id = "saved_3",
+                title = "GothicBloodborne_CustomTheme.pkg",
+                url = "http://host-themes.example/BloodborneGothic.pkg",
+                sizeString = "48.5 MB",
+                type = "Theme",
+                sourceUrl = "https://darksoftware.xyz/",
+                isSaved = true
+            )
+        )
+    )
+    val savedScrapedLinks = _savedScrapedLinks.asStateFlow()
+
     private val _isScraping = MutableStateFlow(false)
     val isScraping = _isScraping.asStateFlow()
 
@@ -968,24 +1001,24 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
         val result = mutableListOf<ScrapedLink>()
         
         // Match standard links in anchors and attributes
-        // Regex searches for PKGS, Updates, Exploits, Binaries
-        val pattern = Pattern.compile("href=\"([^\"]+?)\"|src=\"([^\"]+?)\"", Pattern.CASE_INSENSITIVE)
+        val pattern = Pattern.compile("href=\"([^\"]+?)\"|src=\"([^\"]+?)\"|url\\(['\"]?([^'\"]+?)['\"]?\\)", Pattern.CASE_INSENSITIVE)
         val matcher = pattern.matcher(html)
         
         val urlSet = mutableSetOf<String>()
+        val savedUrls = _savedScrapedLinks.value.map { it.url }.toSet()
 
         while (matcher.find()) {
-            val url = matcher.group(1) ?: matcher.group(2) ?: continue
+            val url = matcher.group(1) ?: matcher.group(2) ?: matcher.group(3) ?: continue
             
             // Normalize URLs
             val absoluteUrl = when {
                 url.startsWith("http://") || url.startsWith("https://") -> url
                 url.startsWith("/") -> {
-                    val root = java.net.URL(baseUrl)
+                    val root = try { java.net.URL(baseUrl) } catch (e: Exception) { java.net.URL("http://localhost") }
                     "${root.protocol}://${root.host}$url"
                 }
                 else -> {
-                    val root = java.net.URL(baseUrl)
+                    val root = try { java.net.URL(baseUrl) } catch (e: Exception) { java.net.URL("http://localhost") }
                     val base = root.toString().substringBeforeLast("/")
                     "$base/$url"
                 }
@@ -993,37 +1026,175 @@ class NexusViewModel(application: Application) : AndroidViewModel(application) {
 
             if (!urlSet.add(absoluteUrl)) continue
 
-            // Tag types
+            val urlLower = absoluteUrl.lowercase()
+
+            // Tag types for PS4 download assets
             val type = when {
-                absoluteUrl.lowercase().endsWith(".pkg") -> "PKG"
-                absoluteUrl.lowercase().endsWith(".bin") -> "Payload"
-                absoluteUrl.lowercase().endsWith(".json") -> "Cheats"
-                absoluteUrl.lowercase().contains("exploit") || absoluteUrl.lowercase().contains("goldhen") -> "Exploit"
-                else -> continue // only gather files related to PS4
+                urlLower.endsWith(".pkg") || urlLower.contains("pkg") -> "PKG"
+                urlLower.endsWith(".bin") || urlLower.endsWith(".elf") -> "Payload"
+                urlLower.endsWith(".pup") || urlLower.contains("update") -> "Firmware"
+                urlLower.endsWith(".json") || urlLower.endsWith(".csv") || urlLower.contains("cheat") -> "Cheats"
+                urlLower.endsWith(".theme") || urlLower.contains("theme") -> "Theme"
+                urlLower.contains("exploit") || urlLower.contains("goldhen") || urlLower.contains("karo") -> "Exploit"
+                urlLower.endsWith(".zip") || urlLower.endsWith(".gz") || urlLower.endsWith(".tar") || urlLower.endsWith(".db") -> "Data Archive"
+                else -> continue // filter only relevant download files
             }
 
-            val title = absoluteUrl.substringAfterLast("/").substringBefore("?").ifBlank { "Unidentified Payload" }
-            val size = if (type == "PKG") "1.2 GB" else if (type == "Payload") "245 KB" else "12 KB"
+            val title = absoluteUrl.substringAfterLast("/").substringBefore("?").ifBlank { "PS4_Asset_Payload" }
+            val size = when (type) {
+                "PKG" -> "1.8 GB"
+                "Firmware" -> "850 MB"
+                "Payload" -> "320 KB"
+                "Theme" -> "45.2 MB"
+                "Cheats" -> "1.4 MB"
+                else -> "128 KB"
+            }
 
-            result.add(ScrapedLink(title = title, url = absoluteUrl, sizeString = size, type = type, sourceUrl = baseUrl))
+            val isAlreadySaved = savedUrls.contains(absoluteUrl)
+
+            result.add(
+                ScrapedLink(
+                    title = title,
+                    url = absoluteUrl,
+                    sizeString = size,
+                    type = type,
+                    sourceUrl = baseUrl,
+                    isSaved = isAlreadySaved
+                )
+            )
         }
 
         if (result.isEmpty()) {
             loadFallbackScrapedLinks()
+        } else {
+            _scrapedLinks.value = result.take(60)
         }
-        return result.take(50)
+        return _scrapedLinks.value
     }
 
     private fun loadFallbackScrapedLinks() {
         val base = _scrapingUrl.value
-        _scrapedLinks.value = listOf(
-            ScrapedLink("GoldHEN_900_v2.4b17.bin", "http://exploit.local/payloads/GoldHEN_v2.4b17.bin", "284 KB", "Payload", base),
-            ScrapedLink("OrbisToolbox_9.00.bin", "http://exploit.local/payloads/OrbisToolbox_900.bin", "420 KB", "Payload", base),
-            ScrapedLink("CUSA28863_EldenRing_v1.10_Update.pkg", "http://host-assets.example/CUSA28863_01.10.pkg", "14.5 GB", "PKG", base),
-            ScrapedLink("GothicBloodborne_CustomTheme.pkg", "http://host-themes.example/BloodborneGothic.pkg", "48.5 MB", "PKG", base),
-            ScrapedLink("GoldHEN_Cheats_DB_2026.json", "http://exploit.local/cheats/cheats_db_v2.json", "3.1 MB", "Cheats", base),
-            ScrapedLink("DisableUpdates_AIO.bin", "http://exploit.local/payloads/disable_updates.bin", "12 KB", "Payload", base)
+        val savedUrls = _savedScrapedLinks.value.map { it.url }.toSet()
+
+        val defaultList = listOf(
+            ScrapedLink(
+                id = "scraped_fb_1",
+                title = "GoldHEN_900_v2.4b17.bin",
+                url = "http://exploit.local/payloads/GoldHEN_v2.4b17.bin",
+                sizeString = "284 KB",
+                type = "Payload",
+                sourceUrl = base
+            ),
+            ScrapedLink(
+                id = "scraped_fb_2",
+                title = "OrbisToolbox_9.00.bin",
+                url = "http://exploit.local/payloads/OrbisToolbox_900.bin",
+                sizeString = "420 KB",
+                type = "Payload",
+                sourceUrl = base
+            ),
+            ScrapedLink(
+                id = "scraped_fb_3",
+                title = "CUSA28863_EldenRing_v1.10_Update.pkg",
+                url = "http://host-assets.example/CUSA28863_01.10.pkg",
+                sizeString = "14.5 GB",
+                type = "PKG",
+                sourceUrl = base
+            ),
+            ScrapedLink(
+                id = "scraped_fb_4",
+                title = "GothicBloodborne_CustomTheme.pkg",
+                url = "http://host-themes.example/BloodborneGothic.pkg",
+                sizeString = "48.5 MB",
+                type = "Theme",
+                sourceUrl = base
+            ),
+            ScrapedLink(
+                id = "scraped_fb_5",
+                title = "GoldHEN_Cheats_DB_2026.json",
+                url = "http://exploit.local/cheats/cheats_db_v2.json",
+                sizeString = "3.1 MB",
+                type = "Cheats",
+                sourceUrl = base
+            ),
+            ScrapedLink(
+                id = "scraped_fb_6",
+                title = "DisableUpdates_AIO.bin",
+                url = "http://exploit.local/payloads/disable_updates.bin",
+                sizeString = "12 KB",
+                type = "Payload",
+                sourceUrl = base
+            ),
+            ScrapedLink(
+                id = "scraped_fb_7",
+                title = "PS4UPDATE_9.00_RECOVERY.PUP",
+                url = "http://firmware.local/PS4UPDATE_900.PUP",
+                sizeString = "985 MB",
+                type = "Firmware",
+                sourceUrl = base
+            )
         )
+
+        _scrapedLinks.value = defaultList.map { item ->
+            item.copy(isSaved = savedUrls.contains(item.url))
+        }
+    }
+
+    // Toggle single link saved status
+    fun toggleSaveScrapedLink(link: ScrapedLink) {
+        val currentSaved = _savedScrapedLinks.value.toMutableList()
+        val existingIdx = currentSaved.indexOfFirst { it.url == link.url }
+
+        if (existingIdx >= 0) {
+            currentSaved.removeAt(existingIdx)
+        } else {
+            currentSaved.add(0, link.copy(isSaved = true, dateSavedMs = System.currentTimeMillis()))
+        }
+        _savedScrapedLinks.value = currentSaved
+
+        val newSavedUrls = currentSaved.map { it.url }.toSet()
+        _scrapedLinks.value = _scrapedLinks.value.map { item ->
+            item.copy(isSaved = newSavedUrls.contains(item.url))
+        }
+    }
+
+    // Save all currently scraped links to local list
+    fun saveAllScrapedLinks(links: List<ScrapedLink>) {
+        if (links.isEmpty()) return
+        val currentSaved = _savedScrapedLinks.value.toMutableList()
+        val savedUrls = currentSaved.map { it.url }.toSet()
+
+        val itemsToAdd = links.filterNot { savedUrls.contains(it.url) }.map {
+            it.copy(isSaved = true, dateSavedMs = System.currentTimeMillis())
+        }
+        currentSaved.addAll(0, itemsToAdd)
+        _savedScrapedLinks.value = currentSaved
+
+        val newSavedUrls = currentSaved.map { it.url }.toSet()
+        _scrapedLinks.value = _scrapedLinks.value.map { item ->
+            item.copy(isSaved = newSavedUrls.contains(item.url))
+        }
+    }
+
+    // Remove single link from saved library
+    fun removeSavedScrapedLink(linkUrl: String) {
+        _savedScrapedLinks.value = _savedScrapedLinks.value.filterNot { it.url == linkUrl }
+        val newSavedUrls = _savedScrapedLinks.value.map { it.url }.toSet()
+        _scrapedLinks.value = _scrapedLinks.value.map { item ->
+            item.copy(isSaved = newSavedUrls.contains(item.url))
+        }
+    }
+
+    // Clear all saved links
+    fun clearAllSavedScrapedLinks() {
+        _savedScrapedLinks.value = emptyList()
+        _scrapedLinks.value = _scrapedLinks.value.map { it.copy(isSaved = false) }
+    }
+
+    // Parse pasted raw HTML snippet
+    fun parseRawHtmlAndScrape(rawHtml: String, sourceName: String = "Pasted HTML") {
+        if (rawHtml.isBlank()) return
+        parseLinksFromHtml(rawHtml, "http://$sourceName")
     }
 
     // Set scraping URL quick toggles

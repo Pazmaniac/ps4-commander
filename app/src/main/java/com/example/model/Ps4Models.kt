@@ -50,16 +50,24 @@ data class CheatItem(
     val category: String,
     val cheatName: String,
     val cheatCodes: String, // Memory offset and bytes representation
-    val author: String = "GoldHEN DB"
+    val author: String = "GoldHEN DB",
+    val instructions: String = "1. Enable GoldHEN Cheat Engine in PS4 Settings.\n2. Launch game on target firmware.\n3. Press L3 + R3 or Share button to open Cheat Overlay Menu.\n4. Toggle cheat item to ON.",
+    val region: String = "US/EU/GLOBAL",
+    val gameVersion: String = "1.00 - 1.08",
+    val activationShortcut: String = "L3 + R3",
+    val isVerified: Boolean = true
 ) : Serializable
 
 data class ScrapedLink(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val title: String,
     val url: String,
     val sizeString: String,
-    val type: String, // "PKG", "Update", "Theme", "Payload"
-    val sourceUrl: String
-)
+    val type: String, // "PKG", "Update", "Theme", "Payload", "Cheats", "Exploit", "Firmware"
+    val sourceUrl: String,
+    val isSaved: Boolean = false,
+    val dateSavedMs: Long = System.currentTimeMillis()
+) : Serializable
 
 data class FtpFileItem(
     val name: String,
@@ -358,7 +366,12 @@ object PreloadedData {
             gameCode = "CUSA-28863",
             category = "HP/FP",
             cheatName = "Infinite HP (God Mode)",
-            cheatCodes = "Offset: 0x2A15B90\nValue: 41 8B 87 28 02 00 00 -> 90 90 90 90 90 90 90\nDescription: Freeze health bars from decreasing on impact."
+            cheatCodes = "Offset: 0x2A15B90\nValue: 41 8B 87 28 02 00 00 -> 90 90 90 90 90 90 90\nDescription: Freeze health bars from decreasing on impact.",
+            instructions = "1. Launch Elden Ring (v1.08+).\n2. Press L3 + R3 to trigger GoldHEN Cheat Overlay.\n3. Enable [Infinite HP] trainer code.\n4. Avoid falling into deep death barriers.",
+            region = "US/GLOBAL",
+            gameVersion = "v1.00 - v1.08",
+            activationShortcut = "L3 + R3",
+            isVerified = true
         ),
         CheatItem(
             id = "c2",
@@ -366,7 +379,12 @@ object PreloadedData {
             gameCode = "CUSA-28863",
             category = "Stats",
             cheatName = "Infinite Runes / Souls on Spend",
-            cheatCodes = "Offset: 0x3BC8E10\nValue: 29 7B 40 -> 90 90 90\nDescription: Spending any amount of runes will make the counter max out."
+            cheatCodes = "Offset: 0x3BC8E10\nValue: 29 7B 40 -> 90 90 90\nDescription: Spending any amount of runes will make the counter max out.",
+            instructions = "1. Open Sites of Grace menu or Level Up merchant.\n2. Spend 1 Rune on any stat or upgrade.\n3. Balance locks to 999,999,999 Runes instantly.",
+            region = "US/GLOBAL",
+            gameVersion = "v1.00 - v1.08",
+            activationShortcut = "Auto-Hook",
+            isVerified = true
         ),
         CheatItem(
             id = "c3",
@@ -374,7 +392,12 @@ object PreloadedData {
             gameCode = "CUSA-34384",
             category = "Combat",
             cheatName = "Infinite Rage Gauge",
-            cheatCodes = "Offset: 0x1F2A7E1\nValue: F3 11 40 18 -> F3 11 40 00\nDescription: Spartan Rage gauge remains 100% full permanently."
+            cheatCodes = "Offset: 0x1F2A7E1\nValue: F3 11 40 18 -> F3 11 40 00\nDescription: Spartan Rage gauge remains 100% full permanently.",
+            instructions = "1. Press L3 + R3 during combat to activate Spartan Rage.\n2. Gauge remains locked full without depleting over time.",
+            region = "US/EU",
+            gameVersion = "v1.00 - v2.01",
+            activationShortcut = "L3 + R3",
+            isVerified = true
         ),
         CheatItem(
             id = "c4",
@@ -382,15 +405,90 @@ object PreloadedData {
             gameCode = "CUSA-00299",
             category = "HP/FP",
             cheatName = "Infinite Health (GOD MODE)",
-            cheatCodes = "Offset: 0x1B82CC4\nValue: 89 83 F0 01 00 00 -> 90 90 90 90 90 90\nDescription: Makes player strictly invulnerable to lethal standard and fall damage."
+            cheatCodes = "Offset: 0x1B82CC4\nValue: 89 83 F0 01 00 00 -> 90 90 90 90 90 90\nDescription: Makes player strictly invulnerable to lethal standard and fall damage.",
+            instructions = "1. Enable GoldHEN Trainer payload on PS4 9.00 / 11.00.\n2. Load Hunter's Dream or Yharnam map.\n3. Press OPTIONS + TOUCHPAD to confirm memory hook.",
+            region = "US/EU/JP",
+            gameVersion = "v1.09",
+            activationShortcut = "OPTIONS + TOUCHPAD",
+            isVerified = true
         ),
         CheatItem(
             id = "c5",
+            gameTitle = "Bloodborne",
+            gameCode = "CUSA-00299",
+            category = "Item Supply",
+            cheatName = "999 Quicksilver Bullets & Blood Vials",
+            cheatCodes = "Offset: 0x1A42D10\nValue: 8B 44 24 -> B8 E7 03 00 00\nDescription: Keeps quicksilver ammunition and blood vial inventory capped at 999.",
+            instructions = "1. Use 1 Blood Vial or fire 1 Quicksilver Bullet.\n2. Inventory automatically refills to 999 instantly.",
+            region = "US/EU/JP",
+            gameVersion = "v1.09",
+            activationShortcut = "Auto-Hook",
+            isVerified = true
+        ),
+        CheatItem(
+            id = "c6",
             gameTitle = "Red Dead Redemption 2",
             gameCode = "CUSA-03041",
             category = "Finance",
             cheatName = "Infinite Cash ($99,999)",
-            cheatCodes = "Offset: 0x4CA10FF\nValue: 44 8B 01 C3 -> B8 9F 86 01 B0\nDescription: Forces internal purse variable to write the max balance on transaction trigger."
+            cheatCodes = "Offset: 0x4CA10FF\nValue: 44 8B 01 C3 -> B8 9F 86 01 B0\nDescription: Forces internal purse variable to write the max balance on transaction trigger.",
+            instructions = "1. Visit any Store or Fence in Saint Denis or Valentine.\n2. Buy or sell any item to trigger balance refresh.",
+            region = "US/EU",
+            gameVersion = "v1.29",
+            activationShortcut = "L3 + R3",
+            isVerified = true
+        ),
+        CheatItem(
+            id = "c7",
+            gameTitle = "Grand Theft Auto V",
+            gameCode = "CUSA-00419",
+            category = "Finance",
+            cheatName = "Max Money Hack ($9,999,999,999)",
+            cheatCodes = "Offset: 0x4CA1F98\nValue: 4B 8B -> B8 9F 86\nDescription: Sets story mode bank account balance of all three protagonists to maximum.",
+            instructions = "1. Switch characters between Michael, Franklin, or Trevor.\n2. Open Maze Bank phone app to confirm multi-billion dollar balance.",
+            region = "US/GLOBAL",
+            gameVersion = "v1.00 - v1.48",
+            activationShortcut = "L3 + R3",
+            isVerified = true
+        ),
+        CheatItem(
+            id = "c8",
+            gameTitle = "Resident Evil 4 Remake",
+            gameCode = "CUSA-32431",
+            category = "Item Supply",
+            cheatName = "Infinite Ammo & Spinel Jewels",
+            cheatCodes = "Offset: 0x1F2A79E\nValue: 89 83 F0 01 -> 90 90 90 90\nDescription: Keeps weapon magazine locked at max. Combat knife durability never depletes.",
+            instructions = "1. Equip any firearm or knife.\n2. Fire a shot or parry Leon's knife attack to activate locked ammo counter.",
+            region = "US/EU",
+            gameVersion = "v1.00 - v1.10",
+            activationShortcut = "L3 + R3",
+            isVerified = true
+        ),
+        CheatItem(
+            id = "c9",
+            gameTitle = "Marvel's Spider-Man",
+            gameCode = "CUSA-11995",
+            category = "Combat",
+            cheatName = "Infinite Focus Gauge & Air Velocity Boost",
+            cheatCodes = "Offset: 0x3E291F0\nValue: D1 B1 AF -> C1 FF FF\nDescription: Fills Focus bar layout instantly for finisher moves & air swing speed multiplier.",
+            instructions = "1. Swing once in Manhattan city map.\n2. Focus bar fills 100% for instant Takedowns.",
+            region = "US/GLOBAL",
+            gameVersion = "v1.00 - v1.19",
+            activationShortcut = "L3 + R3",
+            isVerified = true
+        ),
+        CheatItem(
+            id = "c10",
+            gameTitle = "The Last of Us Part II",
+            gameCode = "CUSA-10249",
+            category = "Item Supply",
+            cheatName = "Infinite Supplements & Crafting Materials",
+            cheatCodes = "Offset: 0x2D10A90\nValue: 29 44 24 10 -> 90 90 90 90\nDescription: Crafting shivs, medkits, or upgrading player pills never decreases inventory count.",
+            instructions = "1. Open Ellie or Abby upgrade journal.\n2. Unlock any skill pill branch or craft 1 item to lock balance to max.",
+            region = "US/EU",
+            gameVersion = "v1.00 - v1.09",
+            activationShortcut = "L3 + R3",
+            isVerified = true
         )
     )
 
